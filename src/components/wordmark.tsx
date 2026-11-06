@@ -16,9 +16,6 @@ type Dot = {
   hy: number;
   x: number;
   y: number;
-  vx: number;
-  vy: number;
-  h: number;
   r: number;
   popT?: number;
   dead?: boolean;
@@ -139,7 +136,6 @@ const sounds = new SoundEngine();
 
 export function Wordmark({
   lines = ["X", "AGENCY"],
-  interactive = true,
   playable = true,
   showGrid = false,
   muted = false,
@@ -151,12 +147,7 @@ export function Wordmark({
   const dotsRef = useRef<Dot[]>([]);
   const specksRef = useRef<Speck[]>([]);
   const flashesRef = useRef<Flash[]>([]);
-  const pointerRef = useRef<{ x: number; y: number; active: boolean; isDown: boolean }>({
-    x: -9999,
-    y: -9999,
-    active: false,
-    isDown: false,
-  });
+  const isDownRef = useRef(false);
 
   const gameRef = useRef<{
     started: boolean;
@@ -212,9 +203,6 @@ export function Wordmark({
                 hy,
                 x: hx,
                 y: hy,
-                vx: 0,
-                vy: 0,
-                h: 0,
                 r: r0,
                 dead: false,
                 gift: "mark",
@@ -243,9 +231,6 @@ export function Wordmark({
                 hy,
                 x: hx,
                 y: hy,
-                vx: 0,
-                vy: 0,
-                h: 0,
                 r: r1,
                 dead: false,
                 gift: "flower",
@@ -306,7 +291,7 @@ export function Wordmark({
     initDots(rect.width, rect.height);
   }, [round, initDots]);
 
-  // Handle window / canvas resize cleanly
+  // Handle window / canvas resize
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -360,28 +345,23 @@ export function Wordmark({
     });
   };
 
-  const handlePointerInteraction = (clientX: number, clientY: number, triggerPop: boolean) => {
+  const handlePointerInteraction = (clientX: number, clientY: number) => {
+    if (!playable) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
     const px = clientX - rect.left;
     const py = clientY - rect.top;
 
-    pointerRef.current.x = px;
-    pointerRef.current.y = py;
-    pointerRef.current.active = true;
-
-    if (triggerPop && playable) {
-      const now = performance.now();
-      dotsRef.current.forEach((dot) => {
-        if (!dot.dead && dot.popT === undefined) {
-          const dist = Math.hypot(dot.x - px, dot.y - py);
-          if (dist <= dot.r * 1.5) {
-            popDot(dot, now);
-          }
+    const now = performance.now();
+    dotsRef.current.forEach((dot) => {
+      if (!dot.dead && dot.popT === undefined) {
+        const dist = Math.hypot(dot.x - px, dot.y - py);
+        if (dist <= dot.r * 1.4) {
+          popDot(dot, now);
         }
-      });
-    }
+      }
+    });
   };
 
   useEffect(() => {
@@ -390,9 +370,12 @@ export function Wordmark({
 
     let animId: number;
 
+    // Fixed, calm, consistent lighting from top-left (no moving with mouse)
+    const lx = -0.55;
+    const ly = -0.75;
+
     const render = (now: number) => {
       const rect = canvas.getBoundingClientRect();
-      // Ensure pixel-perfect Retina / HiDPI rendering so dots are crisp and never blurry
       const dpr = Math.max(window.devicePixelRatio || 1, 2);
       const w = rect.width;
       const h = rect.height;
@@ -408,7 +391,6 @@ export function Wordmark({
       if (canvas.width !== targetCanvasW || canvas.height !== targetCanvasH) {
         canvas.width = targetCanvasW;
         canvas.height = targetCanvasH;
-        // Explicitly align style dimensions with CSS layout
         canvas.style.width = `${w}px`;
         canvas.style.height = `${h}px`;
       }
@@ -416,47 +398,32 @@ export function Wordmark({
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
 
-      // Reset transform cleanly every frame
+      // Clean transform per frame
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = "high";
       ctx.clearRect(0, 0, w, h);
 
-      const pointer = pointerRef.current;
-
-      // Draw background grid
+      // 1. Static background grid (Zero movement, zero flickering)
       if (showGrid) {
         ctx.save();
         const step = 20;
         ctx.lineWidth = 1;
+        ctx.strokeStyle = "rgba(70, 70, 70, 0.18)";
+        ctx.beginPath();
         for (let x = 0; x < w; x += step) {
-          let alpha = 0.18;
-          if (pointer.active) {
-            const dx = Math.abs(x - pointer.x);
-            if (dx < 200) alpha += (1 - dx / 200) * 0.25;
-          }
-          ctx.strokeStyle = `rgba(70, 70, 70, ${alpha})`;
-          ctx.beginPath();
           ctx.moveTo(x, 0);
           ctx.lineTo(x, h);
-          ctx.stroke();
         }
         for (let y = 0; y < h; y += step) {
-          let alpha = 0.18;
-          if (pointer.active) {
-            const dy = Math.abs(y - pointer.y);
-            if (dy < 200) alpha += (1 - dy / 200) * 0.25;
-          }
-          ctx.strokeStyle = `rgba(70, 70, 70, ${alpha})`;
-          ctx.beginPath();
           ctx.moveTo(0, y);
           ctx.lineTo(w, y);
-          ctx.stroke();
         }
+        ctx.stroke();
         ctx.restore();
       }
 
-      // Physics & State update
+      // 2. Dots state update (Static positions, no mouse repulsion)
       const dots = dotsRef.current;
       let newlyCompleted = false;
 
@@ -467,39 +434,12 @@ export function Wordmark({
             dot.dead = true;
           }
         }
-
-        if (interactive) {
-          // Pointer repulsion and highlight (200px field radius)
-          if (pointer.active) {
-            const dx = dot.x - pointer.x;
-            const dy = dot.y - pointer.y;
-            const dist = Math.hypot(dx, dy);
-            if (dist < 200) {
-              const th = Math.max(0, 1 - dist / 200);
-              dot.h += (th - dot.h) * 0.25;
-              if (dist > 1) {
-                const force = (1 - dist / 200) * 1.5;
-                dot.vx += (dx / dist) * force;
-                dot.vy += (dy / dist) * force;
-              }
-            } else {
-              dot.h += (0 - dot.h) * 0.15;
-            }
-          } else {
-            dot.h += (0 - dot.h) * 0.15;
-          }
-
-          // Spring towards home (hx, hy): spring 0.06, damping 0.82
-          const ax = (dot.hx - dot.x) * 0.06;
-          const ay = (dot.hy - dot.y) * 0.06;
-          dot.vx = (dot.vx + ax) * 0.82;
-          dot.vy = (dot.vy + ay) * 0.82;
-          dot.x += dot.vx;
-          dot.y += dot.vy;
-        }
+        // Dots remain 100% steady at their home coordinates
+        dot.x = dot.hx;
+        dot.y = dot.hy;
       });
 
-      // Update Hud
+      // 3. Update Hud
       if (gameRef.current.started && onHud) {
         const ms = gameRef.current.done ? gameRef.current.lastMs : now - gameRef.current.startTime;
         const popped = dots.filter((d) => d.dead).length;
@@ -526,7 +466,7 @@ export function Wordmark({
         }
       }
 
-      // Draw Revealed Gifts (Dead Dots)
+      // 4. Draw Revealed Gifts (Dead Dots)
       dots.forEach((dot) => {
         if (!dot.dead) return;
 
@@ -595,7 +535,7 @@ export function Wordmark({
         ctx.restore();
       });
 
-      // Draw Living Dots (White 3D Spheres — Razor-sharp, clean and bright)
+      // 5. Draw Living Dots (White 3D Spheres — Razor-sharp, perfectly calm and steady)
       dots.forEach((dot) => {
         if (dot.dead) return;
 
@@ -605,22 +545,9 @@ export function Wordmark({
           curR = dot.r * (1 + t * 0.5);
         }
 
-        // Light direction
-        let lx = -0.55;
-        let ly = -0.75;
-        if (pointer.active) {
-          const dx = pointer.x - dot.x;
-          const dy = pointer.y - dot.y;
-          const dist = Math.hypot(dx, dy);
-          if (dist > 1) {
-            lx = dx / dist;
-            ly = dy / dist;
-          }
-        }
-
-        // PASS 1: Soft Contact Drop Shadow (Clean, diffused, never muddy)
+        // PASS 1: Fixed Soft Contact Drop Shadow (Static, elegant)
         ctx.save();
-        const shadowDistance = Math.min(curR * 0.35, 12);
+        const shadowDistance = Math.min(curR * 0.32, 10);
         const sx = dot.x - lx * shadowDistance;
         const sy = dot.y - ly * shadowDistance;
         const shadowRad = curR * 1.25;
@@ -636,26 +563,11 @@ export function Wordmark({
         ctx.fill();
         ctx.restore();
 
-        // PASS 2: Additive Atmospheric Glow
-        if (dot.h > 0.02) {
-          ctx.save();
-          ctx.globalCompositeOperation = "lighter";
-          const glowGrad = ctx.createRadialGradient(dot.x, dot.y, 0, dot.x, dot.y, curR * 2.2);
-          glowGrad.addColorStop(0, `rgba(255, 255, 255, ${0.16 * dot.h})`);
-          glowGrad.addColorStop(1, "rgba(255, 255, 255, 0)");
-          ctx.fillStyle = glowGrad;
-          ctx.beginPath();
-          ctx.arc(dot.x, dot.y, curR * 2.2, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.restore();
-        }
-
-        // PASS 3: Crisp, Brilliant White 3D Sphere Body
+        // PASS 2: Crisp, Pure White 3D Sphere Body
         ctx.save();
         const hx = dot.x + lx * curR * 0.38;
         const hy = dot.y + ly * curR * 0.38;
 
-        // Clean white gradient matching .dot-on design (#ffffff -> #c8c8c8 -> #3a3836)
         const bodyGrad = ctx.createRadialGradient(hx, hy, curR * 0.05, dot.x, dot.y, curR);
         bodyGrad.addColorStop(0, "#ffffff");
         bodyGrad.addColorStop(0.28, "#ffffff");
@@ -668,7 +580,7 @@ export function Wordmark({
         ctx.arc(dot.x, dot.y, curR, 0, Math.PI * 2);
         ctx.fill();
 
-        // Crisp anti-aliased subpixel rim to guarantee zero edge blurriness
+        // Crisp anti-aliased subpixel rim
         ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
         ctx.lineWidth = Math.max(0.6, curR * 0.04);
         ctx.stroke();
@@ -676,7 +588,7 @@ export function Wordmark({
         ctx.restore();
       });
 
-      // Draw Flashes
+      // 6. Draw Flashes
       flashesRef.current = flashesRef.current.filter((f) => {
         const age = now - f.t0;
         const maxAge = f.big ? 260 : 160;
@@ -698,7 +610,7 @@ export function Wordmark({
         return true;
       });
 
-      // Draw Specks
+      // 7. Draw Specks
       specksRef.current = specksRef.current.filter((s) => {
         s.x += s.vx;
         s.y += s.vy;
@@ -721,25 +633,27 @@ export function Wordmark({
 
     animId = requestAnimationFrame(render);
     return () => cancelAnimationFrame(animId);
-  }, [interactive, playable, showGrid, muted]);
+  }, [playable, showGrid, muted]);
 
   return (
     <canvas
       ref={canvasRef}
       className={className}
       onPointerDown={(e) => {
-        pointerRef.current.isDown = true;
-        handlePointerInteraction(e.clientX, e.clientY, true);
+        isDownRef.current = true;
+        handlePointerInteraction(e.clientX, e.clientY);
       }}
       onPointerMove={(e) => {
-        handlePointerInteraction(e.clientX, e.clientY, pointerRef.current.isDown);
+        // Only trigger pop if holding down/dragging over dots
+        if (isDownRef.current) {
+          handlePointerInteraction(e.clientX, e.clientY);
+        }
       }}
       onPointerUp={() => {
-        pointerRef.current.isDown = false;
+        isDownRef.current = false;
       }}
       onPointerLeave={() => {
-        pointerRef.current.active = false;
-        pointerRef.current.isDown = false;
+        isDownRef.current = false;
       }}
     />
   );
