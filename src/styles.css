@@ -1,0 +1,90 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #0a0a0a;
+  --color-fg: #f2f2f2;
+  --color-muted: #9a9a9a;
+  --color-dim: #7a7a7a;
+  --color-faint: #4a4a4a;
+  --color-line: #2a2a2a;
+  --color-line-hover: #555555;
+  --color-dot: #c8c8c8;
+  --color-ink: #141210;
+  --font-display: "Archivo Black", "Arial Black", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --font-body: "Noto Sans Myanmar", "Noto Sans", sans-serif;
+  --radius-control: 8px;
+  --radius-pop: 10px;
+  --radius-card: 12px;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    background: var(--color-bg);
+    color: var(--color-fg);
+  }
+  body {
+    margin: 0;
+    min-height: 100%;
+    background: var(--color-bg);
+    color: var(--color-fg);
+    font-family: var(--font-body);
+    text-rendering: optimizeLegibility;
+  }
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+  ::selection {
+    background: #f2f2f2;
+    color: #0a0a0a;
+  }
+  section {
+    scroll-margin-top: 4.5rem;
+  }
+}
+
+@keyframes pgx-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.reveal {
+  animation: pgx-in 0.45s ease-out both;
+}
+
+.dot-on {
+  aspect-ratio: 1;
+  border-radius: 999px;
+  background: radial-gradient(circle at 32% 28%, #ffffff, #c8c8c8 42%, #3a3836 100%);
+  box-shadow: 3px 4px 6px rgba(0, 0, 0, 0.65);
+}
+
+.dot-off {
+  aspect-ratio: 1;
+  border-radius: 999px;
+  border: 1px solid var(--color-line);
+}
+
+.formula {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  line-height: 1.7;
+  color: var(--color-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .reveal {
+    animation: none;
+  }
+}
