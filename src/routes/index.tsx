@@ -4,7 +4,7 @@ import { Wordmark, fmtTime, type Hud } from "@/components/wordmark";
 import { GlyphMatrix } from "@/components/glyph-matrix";
 import { countText } from "@/lib/glyphs";
 
-export const Route = createFileRoute("/")({ component: Home });
+export const Route = { component: Home };
 
 const NAV = [
   { href: "#concept", label: "concept" },
@@ -16,7 +16,7 @@ const LOCKUP = ["X", "AGENCY"] as const;
 const PROMISE =
   "X Marketing မှ လူကြီးမင်းတို့အတွက် ကောင်းမြတ်သော လက်ဆောင်များ၊ အောင်မြင်မှု ပန်းစည်းများနှင့် အနာဂတ်၏ တော်ပျခြင်း အလင်းများကို ဆောင်ယူပေးပါသည်။ ယင်းဆုလက်ဆောင်များ ကိုယ်တိုင်သည်ပင် ကျွန်တော်တို့ X Marketing ကိုယ်တိုင်ပင် ဖြစ်ပါသည်။";
 
-function Home() {
+export function Home() {
   const [grid, setGrid] = useState(false);
   const [muted, setMuted] = useState(false);
   const [rules, setRules] = useState(false);
