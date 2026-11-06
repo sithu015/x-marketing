@@ -391,6 +391,7 @@ export function Wordmark({
       if (canvas.width !== targetCanvasW || canvas.height !== targetCanvasH) {
         canvas.width = targetCanvasW;
         canvas.height = targetCanvasH;
+        // Explicitly align style dimensions with CSS layout
         canvas.style.width = `${w}px`;
         canvas.style.height = `${h}px`;
       }
@@ -466,72 +467,203 @@ export function Wordmark({
         }
       }
 
-      // 4. Draw Revealed Gifts (Dead Dots)
+      // 4. Draw Revealed Gifts (High-Precision Vector Icons matching concept)
       dots.forEach((dot) => {
         if (!dot.dead) return;
 
         ctx.save();
         const gx = dot.hx;
         const gy = dot.hy;
-        const s = dot.r * 1.4;
-
-        ctx.strokeStyle = "#f2f2f2";
-        ctx.fillStyle = "#f2f2f2";
-        ctx.lineWidth = Math.max(1.2, dot.r * 0.28);
-        ctx.lineCap = "round";
-        ctx.lineJoin = "round";
+        const isLarge = dot.r >= 16; // Line 0 (X: Display Scale) vs Line 1 (AGENCY: Micro Scale)
 
         if (dot.gift === "mark") {
-          // Bold stylized X
-          const arm = s * 0.65;
+          // 4.1 THE SIGNATURE X MARK (Architectural Chamfered Monogram)
+          ctx.save();
+          ctx.translate(gx, gy);
+          const R = dot.r * 0.72;
+          ctx.fillStyle = "#f2f2f2";
           ctx.beginPath();
-          ctx.moveTo(gx - arm, gy - arm);
-          ctx.lineTo(gx + arm, gy + arm);
-          ctx.moveTo(gx + arm, gy - arm);
-          ctx.lineTo(gx - arm, gy + arm);
-          ctx.stroke();
-        } else if (dot.gift === "flower") {
-          // 4-petal flower
-          const pr = s * 0.35;
-          const offsets = [
-            [0, -pr],
-            [pr, 0],
-            [0, pr],
-            [-pr, 0],
-          ];
-          offsets.forEach(([ox, oy]) => {
-            ctx.beginPath();
-            ctx.arc(gx + ox, gy + oy, pr * 0.75, 0, Math.PI * 2);
-            ctx.stroke();
-          });
-          ctx.beginPath();
-          ctx.arc(gx, gy, pr * 0.45, 0, Math.PI * 2);
+          ctx.moveTo(-R, -R * 0.75);
+          ctx.lineTo(-R * 0.5, -R * 0.75);
+          ctx.lineTo(0, -R * 0.25);
+          ctx.lineTo(R * 0.5, -R * 0.75);
+          ctx.lineTo(R, -R * 0.75);
+          ctx.lineTo(R * 0.32, 0);
+          ctx.lineTo(R, R * 0.75);
+          ctx.lineTo(R * 0.5, R * 0.75);
+          ctx.lineTo(0, R * 0.25);
+          ctx.lineTo(-R * 0.5, R * 0.75);
+          ctx.lineTo(-R, R * 0.75);
+          ctx.lineTo(-R * 0.32, 0);
+          ctx.closePath();
           ctx.fill();
-        } else if (dot.gift === "gift") {
-          // Gift box
-          const b = s * 0.65;
-          ctx.strokeRect(gx - b, gy - b, b * 2, b * 2);
+
+          if (isLarge) {
+            ctx.shadowColor = "rgba(255, 255, 255, 0.4)";
+            ctx.shadowBlur = dot.r * 0.35;
+            ctx.strokeStyle = "rgba(255, 255, 255, 0.45)";
+            ctx.lineWidth = Math.max(0.75, dot.r * 0.04);
+            ctx.stroke();
+          }
+          ctx.restore();
+        } else if (dot.gift === "spark") {
+          // 4.2 အနာဂတ်၏ တောက်ပခြင်း အလင်း (Pure Astroid Diamond Nova Star)
+          ctx.save();
+          ctx.translate(gx, gy);
+          const R = dot.r * 0.85;
+          ctx.fillStyle = "#f2f2f2";
           ctx.beginPath();
-          ctx.moveTo(gx, gy - b);
-          ctx.lineTo(gx, gy + b);
-          ctx.moveTo(gx - b, gy);
-          ctx.lineTo(gx + b, gy);
-          ctx.stroke();
+          // 4-point Astroid curve
+          ctx.moveTo(0, -R);
+          ctx.quadraticCurveTo(0, 0, R, 0);
+          ctx.quadraticCurveTo(0, 0, 0, R);
+          ctx.quadraticCurveTo(0, 0, -R, 0);
+          ctx.quadraticCurveTo(0, 0, 0, -R);
+          ctx.closePath();
+          ctx.fill();
+
+          if (isLarge) {
+            // Secondary internal facet for display scale
+            const dR = R * 0.34;
+            ctx.beginPath();
+            ctx.moveTo(0, -dR);
+            ctx.lineTo(dR, 0);
+            ctx.lineTo(0, dR);
+            ctx.lineTo(-dR, 0);
+            ctx.closePath();
+            ctx.fillStyle = "#ffffff";
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.arc(0, 0, R * 0.09, 0, Math.PI * 2);
+            ctx.fillStyle = "#0a0a0a";
+            ctx.fill();
+          }
+          ctx.restore();
+        } else if (dot.gift === "flower") {
+          // 4.3 အောင်မြင်မှု ပန်းစည်း (Architectural Lotus / Rosette Bloom)
+          ctx.save();
+          ctx.translate(gx, gy);
+          const R = dot.r * 0.76;
+          ctx.strokeStyle = "#f2f2f2";
+          ctx.fillStyle = "#f2f2f2";
+          ctx.lineCap = "round";
+          ctx.lineJoin = "round";
+
+          if (isLarge) {
+            ctx.lineWidth = Math.max(1.4, dot.r * 0.075);
+            // Center ascending flame/lotus petal
+            ctx.beginPath();
+            ctx.moveTo(0, -R * 0.85);
+            ctx.bezierCurveTo(-R * 0.45, -R * 0.3, -R * 0.35, R * 0.45, 0, R * 0.55);
+            ctx.bezierCurveTo(R * 0.35, R * 0.45, R * 0.45, -R * 0.3, 0, -R * 0.85);
+            ctx.closePath();
+            ctx.fill();
+
+            // Left and Right spreading triumph petals
+            ctx.beginPath();
+            ctx.moveTo(-R * 0.2, R * 0.4);
+            ctx.bezierCurveTo(-R * 0.85, R * 0.2, -R * 0.85, -R * 0.35, -R * 0.65, -R * 0.55);
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.moveTo(R * 0.2, R * 0.4);
+            ctx.bezierCurveTo(R * 0.85, R * 0.2, R * 0.85, -R * 0.35, R * 0.65, -R * 0.55);
+            ctx.stroke();
+
+            // Calyx grounding arc
+            ctx.beginPath();
+            ctx.arc(0, R * 0.3, R * 0.55, 0.2 * Math.PI, 0.8 * Math.PI);
+            ctx.stroke();
+          } else {
+            // Micro Scale: Clean 4-petal rosette clover
+            ctx.lineWidth = Math.max(1.2, dot.r * 0.22);
+            const pr = R * 0.42;
+            const offsets = [
+              [0, -pr],
+              [pr, 0],
+              [0, pr],
+              [-pr, 0],
+            ];
+            offsets.forEach(([ox, oy]) => {
+              ctx.beginPath();
+              ctx.arc(ox, oy, pr * 0.68, 0, Math.PI * 2);
+              ctx.stroke();
+            });
+            ctx.beginPath();
+            ctx.arc(0, 0, pr * 0.38, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.restore();
         } else {
-          // Spark / star
-          const arm = s * 0.8;
-          const diag = s * 0.3;
-          ctx.beginPath();
-          ctx.moveTo(gx, gy - arm);
-          ctx.lineTo(gx, gy + arm);
-          ctx.moveTo(gx - arm, gy);
-          ctx.lineTo(gx + arm, gy);
-          ctx.moveTo(gx - diag, gy - diag);
-          ctx.lineTo(gx + diag, gy + diag);
-          ctx.moveTo(gx + diag, gy - diag);
-          ctx.lineTo(gx - diag, gy + diag);
-          ctx.stroke();
+          // 4.4 ကောင်းမြတ်သော လက်ဆောင် (Minimalist Jewelry Box & Ribbon Loop)
+          ctx.save();
+          ctx.translate(gx, gy);
+          const R = dot.r * 0.74;
+          ctx.strokeStyle = "#f2f2f2";
+          ctx.fillStyle = "#f2f2f2";
+          ctx.lineCap = "round";
+          ctx.lineJoin = "round";
+
+          if (isLarge) {
+            ctx.lineWidth = Math.max(1.4, dot.r * 0.08);
+            const bw = R * 0.75;
+            const topY = -R * 0.15;
+            const botY = R * 0.8;
+            const h = botY - topY;
+            const cr = Math.min(4, bw * 0.2);
+
+            // Box base
+            ctx.beginPath();
+            ctx.roundRect(-bw, topY, bw * 2, h, [0, 0, cr, cr]);
+            ctx.stroke();
+
+            // Lid overhang
+            ctx.beginPath();
+            ctx.roundRect(-bw * 1.08, topY - h * 0.26, bw * 2.16, h * 0.26, [cr, cr, 0, 0]);
+            ctx.stroke();
+
+            // Center vertical ribbon
+            ctx.beginPath();
+            ctx.moveTo(0, topY - h * 0.26);
+            ctx.lineTo(0, botY);
+            ctx.stroke();
+
+            // Dual ribbon loops
+            const loopW = bw * 0.62;
+            const loopH = h * 0.45;
+            const bowY = topY - h * 0.26;
+            ctx.beginPath();
+            ctx.moveTo(0, bowY);
+            ctx.bezierCurveTo(-loopW * 0.6, bowY - loopH * 1.1, -loopW * 1.2, bowY - loopH * 0.2, 0, bowY);
+            ctx.moveTo(0, bowY);
+            ctx.bezierCurveTo(loopW * 0.6, bowY - loopH * 1.1, loopW * 1.2, bowY - loopH * 0.2, 0, bowY);
+            ctx.stroke();
+
+            // Knot
+            ctx.beginPath();
+            ctx.arc(0, bowY, Math.max(1.2, R * 0.09), 0, Math.PI * 2);
+            ctx.fill();
+          } else {
+            // Micro Scale: High-contrast gift box with ribbon cross
+            const b = R * 0.7;
+            ctx.lineWidth = Math.max(1.2, dot.r * 0.22);
+            ctx.strokeRect(-b, -b * 0.35, b * 2, b * 1.35);
+            ctx.beginPath();
+            ctx.moveTo(0, -b * 0.75);
+            ctx.lineTo(0, b);
+            ctx.moveTo(-b, -b * 0.35);
+            ctx.lineTo(b, -b * 0.35);
+            ctx.stroke();
+            // Micro bow
+            ctx.beginPath();
+            ctx.arc(-b * 0.35, -b * 0.55, b * 0.25, 0, Math.PI * 2);
+            ctx.arc(b * 0.35, -b * 0.55, b * 0.25, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+          ctx.restore();
         }
+
         ctx.restore();
       });
 
@@ -644,7 +776,6 @@ export function Wordmark({
         handlePointerInteraction(e.clientX, e.clientY);
       }}
       onPointerMove={(e) => {
-        // Only trigger pop if holding down/dragging over dots
         if (isDownRef.current) {
           handlePointerInteraction(e.clientX, e.clientY);
         }
