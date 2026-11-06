@@ -1,5 +1,5 @@
-import { useEffect, useRef } from "react";
-import { ADVANCE, CELL, GAP, GLYPHS, RADIUS_RATIO, ROWS } from "@/lib/glyphs";
+import { useEffect, useRef, useState, useCallback } from "react";
+import { ADVANCE, GLYPHS, RADIUS_RATIO, ROWS } from "@/lib/glyphs";
 
 export type Hud = {
   ms: number;
@@ -12,18 +12,23 @@ export type Hud = {
 type Gift = "flower" | "gift" | "spark" | "mark";
 
 type Dot = {
+  id: number;
+  line: number;
+  ch: string;
+  gridRow: number;
+  gridCol: number;
   hx: number;
   hy: number;
   x: number;
   y: number;
   vx: number;
   vy: number;
-  h: number;
+  h: number; // highlight 0..1
   r: number;
+  baseR: number;
   popT?: number;
   dead?: boolean;
   gift: Gift;
-  n: number;
 };
 
 type Speck = {
@@ -69,7 +74,9 @@ class SoundEngine {
   private getContext(): AudioContext | null {
     if (typeof window === "undefined") return null;
     if (!this.ctx) {
-      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const AudioCtx =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       if (AudioCtx) this.ctx = new AudioCtx();
     }
     if (this.ctx && this.ctx.state === "suspended") {
@@ -90,22 +97,22 @@ class SoundEngine {
     osc.type = "sine";
     if (isMark) {
       osc.frequency.setValueAtTime(880, t);
-      osc.frequency.exponentialRampToValueAtTime(1760, t + 0.12);
-      gain.gain.setValueAtTime(0.2, t);
-      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.16);
+      osc.frequency.exponentialRampToValueAtTime(1760, t + 0.14);
+      gain.gain.setValueAtTime(0.25, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
       osc.connect(gain);
       gain.connect(ctx.destination);
       osc.start(t);
-      osc.stop(t + 0.18);
+      osc.stop(t + 0.2);
     } else {
       osc.frequency.setValueAtTime(523.25, t);
-      osc.frequency.exponentialRampToValueAtTime(659.25, t + 0.08);
-      gain.gain.setValueAtTime(0.12, t);
-      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+      osc.frequency.exponentialRampToValueAtTime(659.25, t + 0.09);
+      gain.gain.setValueAtTime(0.15, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
       osc.connect(gain);
       gain.connect(ctx.destination);
       osc.start(t);
-      osc.stop(t + 0.12);
+      osc.stop(t + 0.14);
     }
   }
 
@@ -116,19 +123,19 @@ class SoundEngine {
 
     const notes = [523.25, 659.25, 783.99, 1046.5];
     notes.forEach((freq, i) => {
-      const t = ctx.currentTime + i * 0.08;
+      const t = ctx.currentTime + i * 0.085;
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
 
       osc.type = "sine";
       osc.frequency.setValueAtTime(freq, t);
-      gain.gain.setValueAtTime(0.15, t);
-      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+      gain.gain.setValueAtTime(0.2, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.38);
 
       osc.connect(gain);
       gain.connect(ctx.destination);
       osc.start(t);
-      osc.stop(t + 0.4);
+      osc.stop(t + 0.42);
     });
   }
 }
@@ -145,10 +152,15 @@ export function Wordmark({
   onHud,
   className = "",
 }: Props) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const dotsRef = useRef<Dot[]>([]);
   const specksRef = useRef<Speck[]>([]);
   const flashesRef = useRef<Flash[]>([]);
+
+  const [dprState, setDprState] = useState(2);
+  const sizeRef = useRef<{ w: number; h: number; dpr: number }>({ w: 0, h: 0, dpr: 2 });
+
   const pointerRef = useRef<{ x: number; y: number; active: boolean; isDown: boolean }>({
     x: -9999,
     y: -9999,
@@ -168,7 +180,184 @@ export function Wordmark({
     lastMs: 0,
   });
 
-  // Re-build dots whenever lines, dimensions or round change
+  // Calculate layout coordinates for all dots based on container dimensions
+  const computeLayout = useCallback(
+    (w: number, h: number) => {
+      if (w <= 0 || h <= 0) return [];
+
+      const isDesktop = w >= 768;
+      // Provide comfortable breathing padding
+      const maxAvailableW = isDesktop ? w * 0.82 : w * 0.90;
+      const maxAvailableH = isDesktop ? h * 0.80 : h * 0.84;
+
+      // Lockup geometry:
+      // Line 0: "X" (5 columns)
+      // Line 1: "AGENCY" (38 columns)
+      // Both lines stretch to the exact same width W
+      // Height 0 = 8 * (W / 5) = 1.6 * W
+      // Gap = 0.38 * (W / 5) = 0.076 * W
+      // Height 1 = 8 * (W / 38) = 0.210526 * W
+      // Total lockup height = (1.6 + 0.076 + 0.210526) * W = 1.886526 * W
+      const ratioHeightToWidth = 1.886526;
+
+      // Fit inside BOTH available width and available height
+      const targetW = Math.min(maxAvailableW, maxAvailableH / ratioHeightToWidth);
+      const targetH = targetW * ratioHeightToWidth;
+
+      const pitch0 = targetW / 5;
+      const pitch1 = targetW / 38;
+      const r0 = pitch0 * RADIUS_RATIO;
+      const r1 = pitch1 * RADIUS_RATIO;
+
+      const height0 = ROWS * pitch0;
+      const gap = pitch0 * 0.38;
+
+      const startX = (w - targetW) / 2;
+      const startY = (h - targetH) / 2;
+
+      const calculatedDots: {
+        id: number;
+        line: number;
+        ch: string;
+        gridRow: number;
+        gridCol: number;
+        hx: number;
+        hy: number;
+        r: number;
+      }[] = [];
+
+      let idCounter = 0;
+
+      // Line 0: X
+      const line0Text = lines[0] ?? "X";
+      const line0Y = startY;
+      for (let ci = 0; ci < line0Text.length; ci++) {
+        const ch = line0Text[ci];
+        const charX = startX + ci * (ADVANCE * pitch0);
+        const rows = GLYPHS[ch] ?? [];
+        for (let r = 0; r < rows.length; r++) {
+          const rowStr = rows[r];
+          for (let c = 0; c < rowStr.length; c++) {
+            if (rowStr[c] === "X") {
+              const hx = charX + (c + 0.5) * pitch0;
+              const hy = line0Y + (r + 0.5) * pitch0;
+              calculatedDots.push({
+                id: idCounter++,
+                line: 0,
+                ch,
+                gridRow: r,
+                gridCol: c,
+                hx,
+                hy,
+                r: r0,
+              });
+            }
+          }
+        }
+      }
+
+      // Line 1: AGENCY
+      const line1Text = lines[1] ?? "AGENCY";
+      const line1Y = startY + height0 + gap;
+      for (let ci = 0; ci < line1Text.length; ci++) {
+        const ch = line1Text[ci];
+        const charX = startX + ci * (ADVANCE * pitch1);
+        const rows = GLYPHS[ch] ?? [];
+        for (let r = 0; r < rows.length; r++) {
+          const rowStr = rows[r];
+          for (let c = 0; c < rowStr.length; c++) {
+            if (rowStr[c] === "X") {
+              const hx = charX + (c + 0.5) * pitch1;
+              const hy = line1Y + (r + 0.5) * pitch1;
+              calculatedDots.push({
+                id: idCounter++,
+                line: 1,
+                ch,
+                gridRow: r,
+                gridCol: c,
+                hx,
+                hy,
+                r: r1,
+              });
+            }
+          }
+        }
+      }
+
+      return calculatedDots;
+    },
+    [lines]
+  );
+
+  // Initialize or re-layout dots
+  const updateDotsLayout = useCallback(
+    (w: number, h: number, isReset: boolean) => {
+      const layout = computeLayout(w, h);
+      if (layout.length === 0) return;
+
+      const currentDots = dotsRef.current;
+
+      if (isReset || currentDots.length !== layout.length) {
+        // Full initialization with new random gift assignment
+        const total = layout.length;
+        const markCount = Math.max(1, Math.round(total * 0.16));
+        const gifts: Gift[] = [];
+        for (let i = 0; i < markCount; i++) gifts.push("mark");
+        const otherTypes: Gift[] = ["flower", "gift", "spark"];
+        while (gifts.length < total) {
+          gifts.push(otherTypes[gifts.length % otherTypes.length]);
+        }
+        // Fisher-Yates shuffle
+        for (let i = gifts.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [gifts[i], gifts[j]] = [gifts[j], gifts[i]];
+        }
+
+        const newDots: Dot[] = layout.map((item, idx) => ({
+          ...item,
+          x: item.hx,
+          y: item.hy,
+          vx: 0,
+          vy: 0,
+          h: 0,
+          baseR: item.r,
+          dead: false,
+          gift: gifts[idx],
+        }));
+
+        dotsRef.current = newDots;
+
+        if (onHud) {
+          onHud({
+            ms: 0,
+            popped: 0,
+            left: newDots.length,
+            found: 0,
+            done: false,
+          });
+        }
+      } else {
+        // Smooth resize: update target home positions and radii without resetting game progress
+        currentDots.forEach((dot, idx) => {
+          const target = layout[idx];
+          if (target) {
+            dot.hx = target.hx;
+            dot.hy = target.hy;
+            dot.r = target.r;
+            dot.baseR = target.r;
+            // If living and near home, smoothly transition
+            if (!dot.dead && dot.popT === undefined) {
+              dot.x = target.hx;
+              dot.y = target.hy;
+            }
+          }
+        });
+      }
+    },
+    [computeLayout, onHud]
+  );
+
+  // Handle round changes (reset game)
   useEffect(() => {
     gameRef.current = {
       started: false,
@@ -179,125 +368,53 @@ export function Wordmark({
     specksRef.current = [];
     flashesRef.current = [];
 
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    const { w, h } = sizeRef.current;
+    if (w > 0 && h > 0) {
+      updateDotsLayout(w, h, true);
+    }
+  }, [round, updateDotsLayout]);
 
-    const rect = canvas.getBoundingClientRect();
-    const w = rect.width;
-    const h = rect.height;
-    if (w <= 0 || h <= 0) return;
+  // ResizeObserver for rock-solid responsive sizing across mobile and desktop
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
 
-    const inner = w * 0.91;
-    const colsLine0 = 5;
-    const colsLine1 = 5 * 6 + 1.6 * 5; // 38 cols
+    const handleResize = () => {
+      const rect = container.getBoundingClientRect();
+      const dpr = Math.max(window.devicePixelRatio || 1, 2); // Ensure crystal-clear rendering
+      const w = Math.round(rect.width);
+      const h = Math.round(rect.height);
 
-    const pitch0 = inner / colsLine0;
-    const pitch1 = inner / colsLine1;
-    const r0 = pitch0 * RADIUS_RATIO;
-    const r1 = pitch1 * RADIUS_RATIO;
+      if (w <= 0 || h <= 0) return;
 
-    const height0 = ROWS * pitch0;
-    const gap = pitch0 * 0.38;
-    const height1 = ROWS * pitch1;
-    const totalH = height0 + gap + height1;
-    const startY = (h - totalH) / 2;
-    const startX = (w - inner) / 2;
+      const sizeChanged = sizeRef.current.w !== w || sizeRef.current.h !== h || sizeRef.current.dpr !== dpr;
+      if (sizeChanged) {
+        sizeRef.current = { w, h, dpr };
+        setDprState(dpr);
 
-    const newDots: Dot[] = [];
-    let dotIndex = 0;
-
-    // Line 0: X
-    const line0Text = lines[0] ?? "X";
-    const line0Y = startY;
-    for (let ci = 0; ci < line0Text.length; ci++) {
-      const ch = line0Text[ci];
-      const charX = startX + ci * (ADVANCE * pitch0);
-      const rows = GLYPHS[ch] ?? [];
-      for (let r = 0; r < rows.length; r++) {
-        const rowStr = rows[r];
-        for (let c = 0; c < rowStr.length; c++) {
-          if (rowStr[c] === "X") {
-            const hx = charX + (c + 0.5) * pitch0;
-            const hy = line0Y + (r + 0.5) * pitch0;
-            newDots.push({
-              hx,
-              hy,
-              x: hx,
-              y: hy,
-              vx: 0,
-              vy: 0,
-              h: 0,
-              r: r0,
-              dead: false,
-              gift: "mark",
-              n: dotIndex++,
-            });
-          }
+        const canvas = canvasRef.current;
+        if (canvas) {
+          canvas.width = Math.round(w * dpr);
+          canvas.height = Math.round(h * dpr);
+          canvas.style.width = `${w}px`;
+          canvas.style.height = `${h}px`;
         }
+
+        const isInitial = dotsRef.current.length === 0;
+        updateDotsLayout(w, h, isInitial);
       }
-    }
+    };
 
-    // Line 1: AGENCY
-    const line1Text = lines[1] ?? "AGENCY";
-    const line1Y = startY + height0 + gap;
-    for (let ci = 0; ci < line1Text.length; ci++) {
-      const ch = line1Text[ci];
-      const charX = startX + ci * (ADVANCE * pitch1);
-      const rows = GLYPHS[ch] ?? [];
-      for (let r = 0; r < rows.length; r++) {
-        const rowStr = rows[r];
-        for (let c = 0; c < rowStr.length; c++) {
-          if (rowStr[c] === "X") {
-            const hx = charX + (c + 0.5) * pitch1;
-            const hy = line1Y + (r + 0.5) * pitch1;
-            newDots.push({
-              hx,
-              hy,
-              x: hx,
-              y: hy,
-              vx: 0,
-              vy: 0,
-              h: 0,
-              r: r1,
-              dead: false,
-              gift: "flower",
-              n: dotIndex++,
-            });
-          }
-        }
-      }
-    }
+    const ro = new ResizeObserver(handleResize);
+    ro.observe(container);
+    handleResize();
 
-    // Distribute gifts
-    const total = newDots.length;
-    const markCount = Math.max(1, Math.round(total * 0.16));
-    const gifts: Gift[] = [];
-    for (let i = 0; i < markCount; i++) gifts.push("mark");
-    const otherTypes: Gift[] = ["flower", "gift", "spark"];
-    while (gifts.length < total) {
-      gifts.push(otherTypes[gifts.length % otherTypes.length]);
-    }
-    // Shuffle
-    for (let i = gifts.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [gifts[i], gifts[j]] = [gifts[j], gifts[i]];
-    }
-    newDots.forEach((dot, idx) => {
-      dot.gift = gifts[idx];
-    });
-
-    dotsRef.current = newDots;
-
-    if (onHud) {
-      onHud({
-        ms: 0,
-        popped: 0,
-        left: newDots.length,
-        found: 0,
-        done: false,
-      });
-    }
-  }, [lines, round]);
+    window.addEventListener("resize", handleResize);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", handleResize);
+    };
+  }, [updateDotsLayout]);
 
   const popDot = (dot: Dot, now: number) => {
     if (dot.dead || dot.popT !== undefined) return;
@@ -310,11 +427,11 @@ export function Wordmark({
     dot.popT = now;
     sounds.playPop(dot.gift === "mark", muted);
 
-    // Spawn specks
+    // Particles explosion
     const count = dot.gift === "mark" ? 28 : 16;
     for (let i = 0; i < count; i++) {
       const angle = Math.random() * Math.PI * 2;
-      const speed = (Math.random() * 2.8 + 1.2) * (dot.r / 6);
+      const speed = (Math.random() * 2.8 + 1.2) * (dot.r / 5);
       specksRef.current.push({
         x: dot.x,
         y: dot.y,
@@ -326,13 +443,13 @@ export function Wordmark({
       });
     }
 
-    // Flash
+    // Flash burst
     flashesRef.current.push({
       x: dot.x,
       y: dot.y,
       t0: now,
       big: dot.gift === "mark",
-      rad: dot.r * (dot.gift === "mark" ? 3.5 : 2.2),
+      rad: dot.r * (dot.gift === "mark" ? 3.6 : 2.4),
     });
   };
 
@@ -352,7 +469,7 @@ export function Wordmark({
       dotsRef.current.forEach((dot) => {
         if (!dot.dead && dot.popT === undefined) {
           const dist = Math.hypot(dot.x - px, dot.y - py);
-          if (dist <= dot.r * 1.5) {
+          if (dist <= Math.max(dot.r * 1.4, 18)) {
             popDot(dot, now);
           }
         }
@@ -360,6 +477,7 @@ export function Wordmark({
     }
   };
 
+  // Main Render Animation Loop
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -367,49 +485,47 @@ export function Wordmark({
     let animId: number;
 
     const render = (now: number) => {
-      const rect = canvas.getBoundingClientRect();
-      const dpr = window.devicePixelRatio || 1;
-      const w = rect.width;
-      const h = rect.height;
-
-      if (canvas.width !== Math.floor(w * dpr) || canvas.height !== Math.floor(h * dpr)) {
-        canvas.width = Math.floor(w * dpr);
-        canvas.height = Math.floor(h * dpr);
-      }
-
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
 
-      ctx.save();
-      ctx.scale(dpr, dpr);
+      const { w, h, dpr } = sizeRef.current;
+      if (w <= 0 || h <= 0) {
+        animId = requestAnimationFrame(render);
+        return;
+      }
+
+      // Reset transform to exact device pixels
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
       ctx.clearRect(0, 0, w, h);
 
       const pointer = pointerRef.current;
 
-      // Draw background grid
+      // 1. Antigravity Subtle Spatial Background Glow & Grid
       if (showGrid) {
         ctx.save();
-        const step = 20;
+        const step = w >= 768 ? 24 : 18;
         ctx.lineWidth = 1;
         for (let x = 0; x < w; x += step) {
-          let alpha = 0.18;
+          let alpha = 0.12;
           if (pointer.active) {
             const dx = Math.abs(x - pointer.x);
-            if (dx < 200) alpha += (1 - dx / 200) * 0.25;
+            if (dx < 200) alpha += (1 - dx / 200) * 0.28;
           }
-          ctx.strokeStyle = `rgba(70, 70, 70, ${alpha})`;
+          ctx.strokeStyle = `rgba(80, 80, 80, ${alpha})`;
           ctx.beginPath();
           ctx.moveTo(x, 0);
           ctx.lineTo(x, h);
           ctx.stroke();
         }
         for (let y = 0; y < h; y += step) {
-          let alpha = 0.18;
+          let alpha = 0.12;
           if (pointer.active) {
             const dy = Math.abs(y - pointer.y);
-            if (dy < 200) alpha += (1 - dy / 200) * 0.25;
+            if (dy < 200) alpha += (1 - dy / 200) * 0.28;
           }
-          ctx.strokeStyle = `rgba(70, 70, 70, ${alpha})`;
+          ctx.strokeStyle = `rgba(80, 80, 80, ${alpha})`;
           ctx.beginPath();
           ctx.moveTo(0, y);
           ctx.lineTo(w, y);
@@ -418,12 +534,12 @@ export function Wordmark({
         ctx.restore();
       }
 
-      // Physics & State update
+      // 2. Physics & State update
       const dots = dotsRef.current;
       let newlyCompleted = false;
 
       dots.forEach((dot) => {
-        // Popping check
+        // Popping transition (110ms)
         if (dot.popT !== undefined && !dot.dead) {
           if (now - dot.popT >= 110) {
             dot.dead = true;
@@ -431,7 +547,7 @@ export function Wordmark({
         }
 
         if (interactive) {
-          // Pointer repulsion and highlight
+          // Pointer field physics (200px field radius)
           if (pointer.active) {
             const dx = dot.x - pointer.x;
             const dy = dot.y - pointer.y;
@@ -440,7 +556,7 @@ export function Wordmark({
               const th = Math.max(0, 1 - dist / 200);
               dot.h += (th - dot.h) * 0.25;
               if (dist > 1) {
-                const force = (1 - dist / 200) * 1.5;
+                const force = (1 - dist / 200) * 1.8;
                 dot.vx += (dx / dist) * force;
                 dot.vy += (dy / dist) * force;
               }
@@ -451,7 +567,7 @@ export function Wordmark({
             dot.h += (0 - dot.h) * 0.15;
           }
 
-          // Spring towards home (hx, hy)
+          // Spring physics: spring = 0.06, damping = 0.82
           const ax = (dot.hx - dot.x) * 0.06;
           const ay = (dot.hy - dot.y) * 0.06;
           dot.vx = (dot.vx + ax) * 0.82;
@@ -461,7 +577,7 @@ export function Wordmark({
         }
       });
 
-      // Update Hud
+      // 3. Hud calculation
       if (gameRef.current.started && onHud) {
         const ms = gameRef.current.done ? gameRef.current.lastMs : now - gameRef.current.startTime;
         const popped = dots.filter((d) => d.dead).length;
@@ -488,24 +604,24 @@ export function Wordmark({
         }
       }
 
-      // Draw Revealed Gifts (Dead Dots)
+      // 4. Draw Revealed Gifts (Behind dead spheres)
       dots.forEach((dot) => {
         if (!dot.dead) return;
 
         ctx.save();
         const gx = dot.hx;
         const gy = dot.hy;
-        const s = dot.r * 1.4;
+        const s = dot.r * 1.25;
 
         ctx.strokeStyle = "#f2f2f2";
         ctx.fillStyle = "#f2f2f2";
-        ctx.lineWidth = Math.max(1.2, dot.r * 0.28);
+        ctx.lineWidth = Math.max(1.3, dot.r * 0.28);
         ctx.lineCap = "round";
         ctx.lineJoin = "round";
 
         if (dot.gift === "mark") {
-          // Bold stylized X
-          const arm = s * 0.65;
+          // X mark
+          const arm = s * 0.7;
           ctx.beginPath();
           ctx.moveTo(gx - arm, gy - arm);
           ctx.lineTo(gx + arm, gy + arm);
@@ -514,7 +630,7 @@ export function Wordmark({
           ctx.stroke();
         } else if (dot.gift === "flower") {
           // 4-petal flower
-          const pr = s * 0.35;
+          const pr = s * 0.38;
           const offsets = [
             [0, -pr],
             [pr, 0],
@@ -523,7 +639,7 @@ export function Wordmark({
           ];
           offsets.forEach(([ox, oy]) => {
             ctx.beginPath();
-            ctx.arc(gx + ox, gy + oy, pr * 0.75, 0, Math.PI * 2);
+            ctx.arc(gx + ox, gy + oy, pr * 0.72, 0, Math.PI * 2);
             ctx.stroke();
           });
           ctx.beginPath();
@@ -541,8 +657,8 @@ export function Wordmark({
           ctx.stroke();
         } else {
           // Spark / star
-          const arm = s * 0.8;
-          const diag = s * 0.3;
+          const arm = s * 0.85;
+          const diag = s * 0.32;
           ctx.beginPath();
           ctx.moveTo(gx, gy - arm);
           ctx.lineTo(gx, gy + arm);
@@ -557,7 +673,7 @@ export function Wordmark({
         ctx.restore();
       });
 
-      // Draw Living Dots (Spheres)
+      // 5. Draw Living 3D Spheres with 3-Pass Precision Shader
       dots.forEach((dot) => {
         if (dot.dead) return;
 
@@ -567,7 +683,7 @@ export function Wordmark({
           curR = dot.r * (1 + t * 0.5);
         }
 
-        // Light direction
+        // Light direction calculation
         let lx = -0.55;
         let ly = -0.75;
         if (pointer.active) {
@@ -580,55 +696,79 @@ export function Wordmark({
           }
         }
 
-        // PASS 1: Shadow
+        // PASS 1: Realistic Soft Diffused Drop Shadow (Weightless spatial illusion)
         ctx.save();
-        const shadowOffset = curR * 0.35;
-        const sx = dot.x - lx * shadowOffset;
-        const sy = dot.y - ly * shadowOffset;
+        const shadowDistance = curR * 0.42;
+        const sx = dot.x - lx * shadowDistance;
+        const sy = dot.y - ly * shadowDistance;
+        const shadowRadius = curR * (1.25 + dot.h * 0.35);
+
+        const sGrad = ctx.createRadialGradient(sx, sy, curR * 0.3, sx, sy, shadowRadius);
+        sGrad.addColorStop(0, "rgba(0, 0, 0, 0.75)");
+        sGrad.addColorStop(0.5, "rgba(0, 0, 0, 0.35)");
+        sGrad.addColorStop(1, "rgba(0, 0, 0, 0)");
+
+        ctx.fillStyle = sGrad;
         ctx.beginPath();
-        ctx.arc(sx, sy, curR * 1.05, 0, Math.PI * 2);
-        ctx.fillStyle = "rgba(10, 10, 10, 0.65)";
+        ctx.arc(sx, sy, shadowRadius, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
 
-        // PASS 2: Additive Glow
+        // PASS 2: Additive Atmospheric Glow
         if (dot.h > 0.02) {
           ctx.save();
           ctx.globalCompositeOperation = "lighter";
-          const glowGrad = ctx.createRadialGradient(dot.x, dot.y, 0, dot.x, dot.y, curR * 2.2);
-          glowGrad.addColorStop(0, `rgba(255, 255, 255, ${0.16 * dot.h})`);
+          const glowGrad = ctx.createRadialGradient(dot.x, dot.y, curR * 0.2, dot.x, dot.y, curR * 2.3);
+          glowGrad.addColorStop(0, `rgba(255, 255, 255, ${0.18 * dot.h})`);
+          glowGrad.addColorStop(0.6, `rgba(220, 220, 220, ${0.06 * dot.h})`);
           glowGrad.addColorStop(1, "rgba(255, 255, 255, 0)");
+
           ctx.fillStyle = glowGrad;
           ctx.beginPath();
-          ctx.arc(dot.x, dot.y, curR * 2.2, 0, Math.PI * 2);
+          ctx.arc(dot.x, dot.y, curR * 2.3, 0, Math.PI * 2);
           ctx.fill();
           ctx.restore();
         }
 
-        // PASS 3: Sphere Body
+        // PASS 3: Hyper-Refined 3D Metallic/Specular Sphere Body
         ctx.save();
-        const hx = dot.x + lx * curR * 0.38;
-        const hy = dot.y + ly * curR * 0.38;
-        const bodyGrad = ctx.createRadialGradient(hx, hy, curR * 0.05, dot.x, dot.y, curR);
+        // Specular highlight offset
+        const hx = dot.x + lx * curR * 0.42;
+        const hy = dot.y + ly * curR * 0.42;
+
+        const bodyGrad = ctx.createRadialGradient(hx, hy, curR * 0.04, dot.x, dot.y, curR);
+        // Pure crisp white specular highlight stop
         bodyGrad.addColorStop(0, "#ffffff");
-        bodyGrad.addColorStop(0.35, "#c8c8c8");
+        // Specular falloff
+        bodyGrad.addColorStop(0.18, "#ececec");
+        // Concept Albedo: RGB 200 (#c8c8c8)
+        bodyGrad.addColorStop(0.48, "#c8c8c8");
+        // Shading terminator
+        bodyGrad.addColorStop(0.82, "#585552");
+        // Deep ink shade rim (#141210)
         bodyGrad.addColorStop(1, "#141210");
 
         ctx.fillStyle = bodyGrad;
         ctx.beginPath();
         ctx.arc(dot.x, dot.y, curR, 0, Math.PI * 2);
         ctx.fill();
+
+        // Subpixel rim stroke to guarantee zero edge pixelation
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.15)";
+        ctx.lineWidth = Math.max(0.6, curR * 0.06);
+        ctx.stroke();
+
         ctx.restore();
       });
 
-      // Draw Flashes
+      // 6. Draw Flashes
       flashesRef.current = flashesRef.current.filter((f) => {
         const age = now - f.t0;
         const maxAge = f.big ? 260 : 160;
         if (age >= maxAge) return false;
         const prog = age / maxAge;
         const curRad = f.rad * (0.4 + prog * 0.8);
-        const alpha = (1 - prog) * 0.45;
+        const alpha = (1 - prog) * 0.5;
 
         ctx.save();
         ctx.globalCompositeOperation = "lighter";
@@ -643,7 +783,7 @@ export function Wordmark({
         return true;
       });
 
-      // Draw Specks
+      // 7. Draw Specks
       specksRef.current = specksRef.current.filter((s) => {
         s.x += s.vx;
         s.y += s.vy;
@@ -661,7 +801,6 @@ export function Wordmark({
         return true;
       });
 
-      ctx.restore();
       animId = requestAnimationFrame(render);
     };
 
@@ -670,23 +809,25 @@ export function Wordmark({
   }, [interactive, playable, showGrid, muted]);
 
   return (
-    <canvas
-      ref={canvasRef}
-      className={className}
-      onPointerDown={(e) => {
-        pointerRef.current.isDown = true;
-        handlePointerInteraction(e.clientX, e.clientY, true);
-      }}
-      onPointerMove={(e) => {
-        handlePointerInteraction(e.clientX, e.clientY, pointerRef.current.isDown);
-      }}
-      onPointerUp={() => {
-        pointerRef.current.isDown = false;
-      }}
-      onPointerLeave={() => {
-        pointerRef.current.active = false;
-        pointerRef.current.isDown = false;
-      }}
-    />
+    <div ref={containerRef} className={`relative h-full w-full overflow-hidden select-none ${className}`}>
+      <canvas
+        ref={canvasRef}
+        className="block h-full w-full cursor-crosshair touch-manipulation"
+        onPointerDown={(e) => {
+          pointerRef.current.isDown = true;
+          handlePointerInteraction(e.clientX, e.clientY, true);
+        }}
+        onPointerMove={(e) => {
+          handlePointerInteraction(e.clientX, e.clientY, pointerRef.current.isDown);
+        }}
+        onPointerUp={() => {
+          pointerRef.current.isDown = false;
+        }}
+        onPointerLeave={() => {
+          pointerRef.current.active = false;
+          pointerRef.current.isDown = false;
+        }}
+      />
+    </div>
   );
 }
