@@ -477,71 +477,156 @@ export function Wordmark({
         const isLarge = dot.r >= 16; // Line 0 (X: Display Scale) vs Line 1 (AGENCY: Micro Scale)
 
         if (dot.gift === "mark") {
-          // 4.1 THE SIGNATURE X MARK (Architectural Chamfered Monogram)
+          // 4.1 THE SIGNATURE X MARK (Modern Split-Blade Monogram with Negative Space Intersect)
           ctx.save();
           ctx.translate(gx, gy);
-          const R = dot.r * 0.72;
+          const R = dot.r * 0.74;
           ctx.fillStyle = "#f2f2f2";
-          ctx.beginPath();
-          ctx.moveTo(-R, -R * 0.75);
-          ctx.lineTo(-R * 0.5, -R * 0.75);
-          ctx.lineTo(0, -R * 0.25);
-          ctx.lineTo(R * 0.5, -R * 0.75);
-          ctx.lineTo(R, -R * 0.75);
-          ctx.lineTo(R * 0.32, 0);
-          ctx.lineTo(R, R * 0.75);
-          ctx.lineTo(R * 0.5, R * 0.75);
-          ctx.lineTo(0, R * 0.25);
-          ctx.lineTo(-R * 0.5, R * 0.75);
-          ctx.lineTo(-R, R * 0.75);
-          ctx.lineTo(-R * 0.32, 0);
-          ctx.closePath();
-          ctx.fill();
+          ctx.strokeStyle = "#f2f2f2";
+          ctx.lineCap = "round";
+          ctx.lineJoin = "round";
 
           if (isLarge) {
-            ctx.shadowColor = "rgba(255, 255, 255, 0.4)";
+            ctx.shadowColor = "rgba(255, 255, 255, 0.45)";
             ctx.shadowBlur = dot.r * 0.35;
-            ctx.strokeStyle = "rgba(255, 255, 255, 0.45)";
-            ctx.lineWidth = Math.max(0.75, dot.r * 0.04);
+
+            const w = R * 0.22;
+            const arm = R * 0.88;
+
+            // Forward Blade (\)
+            ctx.beginPath();
+            ctx.moveTo(-arm + w * 0.5, -arm - w * 0.5);
+            ctx.lineTo(-arm - w * 0.5, -arm + w * 0.5);
+            ctx.lineTo(arm - w * 0.5, arm + w * 0.5);
+            ctx.lineTo(arm + w * 0.5, arm - w * 0.5);
+            ctx.closePath();
+            ctx.fill();
+
+            // Crossing Slash (/) with Negative Space Clearance Gap in the center
+            const gap = w * 1.35;
+            // Top-Right arm
+            ctx.beginPath();
+            ctx.moveTo(gap * 0.7, -gap * 0.7 + w * 0.7);
+            ctx.lineTo(arm - w * 0.5, -arm - w * 0.5);
+            ctx.lineTo(arm + w * 0.5, -arm + w * 0.5);
+            ctx.lineTo(gap * 0.7 + w * 0.7, -gap * 0.7);
+            ctx.closePath();
+            ctx.fill();
+
+            // Bottom-Left arm
+            ctx.beginPath();
+            ctx.moveTo(-gap * 0.7, gap * 0.7 - w * 0.7);
+            ctx.lineTo(-arm + w * 0.5, arm + w * 0.5);
+            ctx.lineTo(-arm - w * 0.5, arm - w * 0.5);
+            ctx.lineTo(-gap * 0.7 - w * 0.7, gap * 0.7);
+            ctx.closePath();
+            ctx.fill();
+          } else {
+            // Micro Scale: Clean high-contrast crossing cross
+            ctx.lineWidth = Math.max(1.2, dot.r * 0.28);
+            const arm = R * 0.85;
+            ctx.beginPath();
+            ctx.moveTo(-arm, -arm);
+            ctx.lineTo(arm, arm);
+            ctx.moveTo(arm, -arm);
+            ctx.lineTo(-arm, arm);
             ctx.stroke();
           }
           ctx.restore();
         } else if (dot.gift === "spark") {
-          // 4.2 အနာဂတ်၏ တောက်ပခြင်း အလင်း (Pure Astroid Diamond Nova Star)
+          // 4.2 အနာဂတ်၏ တောက်ပခြင်း အလင်းစက် (Radiant Diamond Starburst & Companion Sparkles)
           ctx.save();
           ctx.translate(gx, gy);
-          const R = dot.r * 0.85;
-          ctx.fillStyle = "#f2f2f2";
-          ctx.beginPath();
-          // 4-point Astroid curve
-          ctx.moveTo(0, -R);
-          ctx.quadraticCurveTo(0, 0, R, 0);
-          ctx.quadraticCurveTo(0, 0, 0, R);
-          ctx.quadraticCurveTo(0, 0, -R, 0);
-          ctx.quadraticCurveTo(0, 0, 0, -R);
-          ctx.closePath();
-          ctx.fill();
+          const R = dot.r * 0.82;
+          ctx.fillStyle = "#ffffff";
+          ctx.strokeStyle = "#ffffff";
+          ctx.lineCap = "round";
+          ctx.lineJoin = "round";
 
           if (isLarge) {
-            // Secondary internal facet for display scale
-            const dR = R * 0.34;
+            ctx.shadowColor = "rgba(255, 255, 255, 0.8)";
+            ctx.shadowBlur = dot.r * 0.4;
+
+            // 4 Primary Radiant Tapered Needles
+            const beamL = R * 0.95;
+            const beamW = R * 0.12;
+
+            // Vertical beam
             ctx.beginPath();
-            ctx.moveTo(0, -dR);
-            ctx.lineTo(dR, 0);
-            ctx.lineTo(0, dR);
-            ctx.lineTo(-dR, 0);
+            ctx.moveTo(0, -beamL);
+            ctx.quadraticCurveTo(beamW * 0.45, -beamL * 0.35, beamW, 0);
+            ctx.quadraticCurveTo(beamW * 0.45, beamL * 0.35, 0, beamL);
+            ctx.quadraticCurveTo(-beamW * 0.45, beamL * 0.35, -beamW, 0);
+            ctx.quadraticCurveTo(-beamW * 0.45, -beamL * 0.35, 0, -beamL);
             ctx.closePath();
+            ctx.fill();
+
+            // Horizontal beam
+            ctx.beginPath();
+            ctx.moveTo(-beamL, 0);
+            ctx.quadraticCurveTo(-beamL * 0.35, -beamW * 0.45, 0, -beamW);
+            ctx.quadraticCurveTo(beamL * 0.35, -beamW * 0.45, beamL, 0);
+            ctx.quadraticCurveTo(beamL * 0.35, beamW * 0.45, 0, beamW);
+            ctx.quadraticCurveTo(-beamL * 0.35, beamW * 0.45, -beamL, 0);
+            ctx.closePath();
+            ctx.fill();
+
+            // 4 Diagonal Secondary Glints (8-point brilliance)
+            const dL = R * 0.38;
+            const dW = R * 0.05;
+            const offsets = [
+              [-1, -1],
+              [1, -1],
+              [1, 1],
+              [-1, 1],
+            ];
+            offsets.forEach(([sx, sy]) => {
+              ctx.beginPath();
+              ctx.moveTo(0, 0);
+              ctx.quadraticCurveTo(sx * dW * 2, sy * dL * 0.3, sx * dL * 0.707, sy * dL * 0.707);
+              ctx.quadraticCurveTo(sx * dL * 0.3, sy * dW * 2, 0, 0);
+              ctx.closePath();
+              ctx.fillStyle = "rgba(255, 255, 255, 0.75)";
+              ctx.fill();
+            });
+
+            // Luminous center star core
+            ctx.beginPath();
+            ctx.arc(0, 0, R * 0.08, 0, Math.PI * 2);
             ctx.fillStyle = "#ffffff";
             ctx.fill();
 
+            // Companion micro-sparkles
+            const s1X = R * 0.58;
+            const s1Y = -R * 0.55;
+            const s1R = R * 0.25;
             ctx.beginPath();
-            ctx.arc(0, 0, R * 0.09, 0, Math.PI * 2);
-            ctx.fillStyle = "#0a0a0a";
+            ctx.moveTo(s1X, s1Y - s1R);
+            ctx.quadraticCurveTo(s1X + s1R * 0.2, s1Y, s1X + s1R, s1Y);
+            ctx.quadraticCurveTo(s1X, s1Y + s1R * 0.2, s1X, s1Y + s1R);
+            ctx.quadraticCurveTo(s1X - s1R * 0.2, s1Y, s1X - s1R, s1Y);
+            ctx.quadraticCurveTo(s1X, s1Y - s1R * 0.2, s1X, s1Y - s1R);
+            ctx.closePath();
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.arc(-R * 0.52, R * 0.52, Math.max(1, R * 0.05), 0, Math.PI * 2);
+            ctx.fill();
+          } else {
+            // Micro Scale: Crisp 4-point diamond star
+            const arm = R * 0.9;
+            ctx.beginPath();
+            ctx.moveTo(0, -arm);
+            ctx.quadraticCurveTo(0, 0, arm, 0);
+            ctx.quadraticCurveTo(0, 0, 0, arm);
+            ctx.quadraticCurveTo(0, 0, -arm, 0);
+            ctx.quadraticCurveTo(0, 0, 0, -arm);
+            ctx.closePath();
             ctx.fill();
           }
           ctx.restore();
         } else if (dot.gift === "flower") {
-          // 4.3 အောင်မြင်မှု ပန်းစည်း (Architectural Lotus / Rosette Bloom)
+          // 4.3 အောင်မြင်မှု နှင်းဆီပန်း (Stemmed Blooming Rose with Calyx & Leaves)
           ctx.save();
           ctx.translate(gx, gy);
           const R = dot.r * 0.76;
@@ -551,48 +636,113 @@ export function Wordmark({
           ctx.lineJoin = "round";
 
           if (isLarge) {
-            ctx.lineWidth = Math.max(1.4, dot.r * 0.075);
-            // Center ascending flame/lotus petal
+            const s = R / 55; // Scale factor based on 55px reference coordinate space
+            ctx.lineWidth = Math.max(1.3, dot.r * 0.065);
+
+            // Stem
             ctx.beginPath();
-            ctx.moveTo(0, -R * 0.85);
-            ctx.bezierCurveTo(-R * 0.45, -R * 0.3, -R * 0.35, R * 0.45, 0, R * 0.55);
-            ctx.bezierCurveTo(R * 0.35, R * 0.45, R * 0.45, -R * 0.3, 0, -R * 0.85);
+            ctx.moveTo(0, 6 * s);
+            ctx.quadraticCurveTo(-3 * s, 28 * s, 0, 52 * s);
+            ctx.stroke();
+
+            // Left Leaf
+            ctx.beginPath();
+            ctx.moveTo(-1 * s, 26 * s);
+            ctx.bezierCurveTo(-20 * s, 25 * s, -34 * s, 16 * s, -38 * s, 10 * s);
+            ctx.bezierCurveTo(-32 * s, 26 * s, -16 * s, 34 * s, -1 * s, 34 * s);
             ctx.closePath();
+            ctx.fillStyle = "rgba(242, 242, 242, 0.22)";
             ctx.fill();
+            ctx.stroke();
 
-            // Left and Right spreading triumph petals
+            // Left Leaf Vein
             ctx.beginPath();
-            ctx.moveTo(-R * 0.2, R * 0.4);
-            ctx.bezierCurveTo(-R * 0.85, R * 0.2, -R * 0.85, -R * 0.35, -R * 0.65, -R * 0.55);
+            ctx.moveTo(-1 * s, 26 * s);
+            ctx.quadraticCurveTo(-22 * s, 21 * s, -36 * s, 12 * s);
+            ctx.stroke();
+
+            // Right Leaf
+            ctx.beginPath();
+            ctx.moveTo(0, 35 * s);
+            ctx.bezierCurveTo(20 * s, 34 * s, 34 * s, 25 * s, 38 * s, 19 * s);
+            ctx.bezierCurveTo(32 * s, 35 * s, 16 * s, 43 * s, 0, 43 * s);
+            ctx.closePath();
+            ctx.fillStyle = "rgba(242, 242, 242, 0.22)";
+            ctx.fill();
+            ctx.stroke();
+
+            // Right Leaf Vein
+            ctx.beginPath();
+            ctx.moveTo(0, 35 * s);
+            ctx.quadraticCurveTo(22 * s, 30 * s, 36 * s, 21 * s);
+            ctx.stroke();
+
+            // Calyx Sepals under the bloom
+            ctx.beginPath();
+            ctx.moveTo(-14 * s, 5 * s);
+            ctx.bezierCurveTo(-20 * s, -2 * s, -20 * s, -10 * s, -22 * s, -14 * s);
+            ctx.moveTo(14 * s, 5 * s);
+            ctx.bezierCurveTo(20 * s, -2 * s, 20 * s, -10 * s, 22 * s, -14 * s);
+            ctx.moveTo(-16 * s, 6 * s);
+            ctx.quadraticCurveTo(0, 14 * s, 16 * s, 6 * s);
+            ctx.stroke();
+
+            // Outer Rose Petal Cup
+            ctx.beginPath();
+            ctx.moveTo(-24 * s, -15 * s);
+            ctx.bezierCurveTo(-28 * s, 3 * s, -16 * s, 12 * s, 0, 12 * s);
+            ctx.bezierCurveTo(16 * s, 12 * s, 28 * s, 3 * s, 24 * s, -15 * s);
+            ctx.bezierCurveTo(22 * s, -30 * s, 14 * s, -40 * s, 0, -44 * s);
+            ctx.bezierCurveTo(-14 * s, -40 * s, -22 * s, -30 * s, -24 * s, -15 * s);
+            ctx.closePath();
+            ctx.fillStyle = "rgba(242, 242, 242, 0.15)";
+            ctx.fill();
+            ctx.stroke();
+
+            // Inner Rose Petal Wraps
+            ctx.beginPath();
+            ctx.moveTo(-23 * s, -12 * s);
+            ctx.bezierCurveTo(-16 * s, -20 * s, 6 * s, -20 * s, 18 * s, -32 * s);
             ctx.stroke();
 
             ctx.beginPath();
-            ctx.moveTo(R * 0.2, R * 0.4);
-            ctx.bezierCurveTo(R * 0.85, R * 0.2, R * 0.85, -R * 0.35, R * 0.65, -R * 0.55);
+            ctx.moveTo(23 * s, -12 * s);
+            ctx.bezierCurveTo(16 * s, -20 * s, -6 * s, -20 * s, -18 * s, -32 * s);
             ctx.stroke();
 
-            // Calyx grounding arc
+            // Center Spiral Rose Whorl
             ctx.beginPath();
-            ctx.arc(0, R * 0.3, R * 0.55, 0.2 * Math.PI, 0.8 * Math.PI);
+            ctx.moveTo(-9 * s, -32 * s);
+            ctx.bezierCurveTo(-14 * s, -42 * s, 14 * s, -42 * s, 9 * s, -32 * s);
+            ctx.bezierCurveTo(6 * s, -25 * s, -6 * s, -25 * s, -3 * s, -30 * s);
+            ctx.bezierCurveTo(-1 * s, -33 * s, 4 * s, -33 * s, 4 * s, -30 * s);
             ctx.stroke();
           } else {
-            // Micro Scale: Clean 4-petal rosette clover
-            ctx.lineWidth = Math.max(1.2, dot.r * 0.22);
-            const pr = R * 0.42;
-            const offsets = [
-              [0, -pr],
-              [pr, 0],
-              [0, pr],
-              [-pr, 0],
-            ];
-            offsets.forEach(([ox, oy]) => {
-              ctx.beginPath();
-              ctx.arc(ox, oy, pr * 0.68, 0, Math.PI * 2);
-              ctx.stroke();
-            });
+            // Micro Scale: Rose bud silhouette + stem + leaf
+            const s = R / 15;
+            ctx.lineWidth = Math.max(1.1, dot.r * 0.2);
             ctx.beginPath();
-            ctx.arc(0, 0, pr * 0.38, 0, Math.PI * 2);
+            ctx.moveTo(0, 2 * s);
+            ctx.lineTo(0, 14 * s);
+            ctx.stroke();
+
+            // Micro Leaf
+            ctx.beginPath();
+            ctx.moveTo(0, 7 * s);
+            ctx.quadraticCurveTo(-7 * s, 5 * s, -8 * s, 3 * s);
+            ctx.quadraticCurveTo(-5 * s, 9 * s, 0, 9 * s);
+            ctx.fillStyle = "#f2f2f2";
             ctx.fill();
+
+            // Micro Rose Bud
+            ctx.beginPath();
+            ctx.arc(0, -4 * s, 7 * s, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(0, -4 * s, 4 * s, 0.3 * Math.PI, 1.4 * Math.PI);
+            ctx.strokeStyle = "#09090b";
+            ctx.lineWidth = Math.max(1, dot.r * 0.15);
+            ctx.stroke();
           }
           ctx.restore();
         } else {
